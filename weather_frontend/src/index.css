@@ -1,0 +1,101 @@
+:root {
+  /* Интерфейс */
+  --bg: #F4F7FB;
+  --surface: #FFFFFF;
+  --border: #DCE3EE;
+  --text: #14213D;
+  --text-muted: #5B6B88;
+  --accent: #2F6FED;
+  --accent-hover: #2459C7;
+  --on-accent: #FFFFFF;
+  --shadow:
+    rgba(20, 33, 61, 0.08) 0 10px 15px -3px, rgba(20, 33, 61, 0.04) 0 4px 6px -2px;
+
+  /* Данные */
+  --temp-hot: #F97316;
+  --temp-cold: #38BDF8;
+  --rain: #3B82F6;
+  --wind: #14B8A6;
+  --warning: #F59E0B;
+  --danger: #DC2626;
+  --success: #16A34A;
+
+  /* Источники прогнозов */
+  --src-1: #2F6FED;
+  --src-2: #8B5CF6;
+  --src-3: #EC4899;
+  --src-4: #10B981;
+  --src-5: #F59E0B;
+
+  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, Consolas, monospace;
+
+  font: 16px/150% var(--sans);
+  color-scheme: light dark;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0E1624;
+    --surface: #16213A;
+    --border: #26334F;
+    --text: #E8EEF8;
+    --text-muted: #9BA9C4;
+    --accent: #5B93FF;
+    --accent-hover: #7DABFF;
+    --on-accent: #0E1624;
+    --shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+}
+
+#root {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--text);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+a {
+  color: var(--accent);
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+p {
+  margin: 0;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
