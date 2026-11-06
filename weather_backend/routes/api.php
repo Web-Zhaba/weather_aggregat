@@ -3,14 +3,33 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Http;
+use App\Services\CityResolver;
 
 Route::prefix('v1')->group(function () {
-    Route::get('/weather', function (Request $request) {
+    Route::get('/weather', function (Request $request, CityResolver $resolver) {
         // return weather data;
         $validated = $request->validate([
-            'latitude' => 'required|numeric|between:-90,90',
-            'longitude' => 'required|numeric|between:-180,180',
+            'latitude' => 'required_without:city|numeric|between:-90,90',
+            'longitude' => 'required_without:city|numeric|between:-180,180',
+            'city' => 'required_without:latitude|string|min:2|max:100',
+            'country' => 'nullable|string|min:2|max:100',
         ]);
+
+        $city = null;
+        if (isset($validated['city'])) {
+            try {
+                $result = $resolver->resolve($validated['city'], $validated['country'] ?? null);
+            } catch (\RuntimeException $e) {
+                return response()->json(['error' => 'Geocoding service is unavailable. Please try again later.'], 502);
+            }
+            if (!$result) {
+                return response()->json(['error' => 'City not found.'], 404);
+            }
+            $city = $result['city'];
+            $validated['latitude'] = $city->lat;
+            $validated['longitude'] = $city->lon;
+        }
+
         $response = Http::get(
             "https://api.open-meteo.com/v1/forecast",
             [
@@ -29,8 +48,35 @@ Route::prefix('v1')->group(function () {
         foreach ($unformatted_data['daily'] as $key => $value) {
             $formatted_data['daily'][$key] = $value;
         }
+        if ($city) {
+            $formatted_data['city'] = $city;
+        }
         return $formatted_data;
     });
+
+    // Поиск города по названию и сохранение его в базу данных, если он не найден (геокодинг короче)
+    Route::get('/cities/resolve', function (Request $request, CityResolver $resolver) {
+        $validated = $request->validate([
+            'city' => 'required|string|min:2|max:100',
+            'country' => 'nullable|string|min:2|max:100',
+        ]);
+
+        try {
+            $result = $resolver->resolve($validated['city'], $validated['country'] ?? null);
+        } catch (\RuntimeException $e) {
+            return response()->json(['error' => 'Geocoding service is unavailable. Please try again later.'], 502);
+        }
+
+        if (!$result) {
+            return response()->json(['error' => 'City not found.'], 404);
+        }
+
+        return response()->json(
+            ['city' => $result['city'], 'source' => $result['source']],
+            $result['source'] === 'geocoding' ? 201 : 200
+        );
+    });
+
     Route::post('/register', function() {
         // return register response;
     });
