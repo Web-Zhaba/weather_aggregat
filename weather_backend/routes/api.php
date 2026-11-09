@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Http;
@@ -11,6 +12,7 @@ Route::prefix('v1')->group(function () {
         $validated = $request->validate([
             'latitude' => 'required_without:city|numeric|between:-90,90',
             'longitude' => 'required_without:city|numeric|between:-180,180',
+            'date' => 'nullable|date',
             'city' => 'required_without:latitude|string|min:2|max:100',
             'country' => 'nullable|string|min:2|max:100',
         ]);
@@ -30,16 +32,24 @@ Route::prefix('v1')->group(function () {
             $validated['longitude'] = $city->lon;
         }
 
-        $response = Http::get(
-            "https://api.open-meteo.com/v1/forecast",
-            [
-                'latitude' => $validated['latitude'],
-                'longitude' => $validated['longitude'],
-                'daily' => 'temperature_2m_max,temperature_2m_min,precipitation_sum',
-                'timezone' => 'auto',
-                'forecast_days' => 1,
-            ]
-        );
+        try {
+            $response = Http::get(
+                "https://api.open-meteo.com/v1/forecast",
+                [
+                    'latitude' => $validated['latitude'],
+                    'longitude' => $validated['longitude'],
+                    'daily' => 'temperature_2m_max,temperature_2m_min,precipitation_sum',
+                    'timezone' => 'auto',
+                    'start_date' => $validated['date'] ?? now()->toDateString(),
+                    'end_date' => $validated['date'] ?? now()->toDateString(),
+                ]
+            );
+        } catch (ConnectionException $e) {
+            return response()->json(['error' => 'Weather service is unavailable. Please try again later.'], 502);
+        }
+        if ($response->failed()) {
+            return response()->json(['error' => 'Weather service is unavailable. Please try again later.'], 502);
+        }
         $unformatted_data = $response->json();
         $formatted_data = [
             'timezone' => $unformatted_data['timezone'],

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\City;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -24,16 +25,20 @@ class CityResolver
             return ['city' => $city, 'source' => 'database'];
         }
 
-        $response = Http::get(
-            "https://geocoding-api.open-meteo.com/v1/search",
-            [
-                'name' => $name,
-                'count' => 10,
-                // Open-Meteo находит название только на языке запроса, поэтому кириллицу ищем на русском
-                'language' => preg_match('/\p{Cyrillic}/u', $name) ? 'ru' : 'en',
-                'format' => 'json',
-            ]
-        );
+        try {
+            $response = Http::get(
+                "https://geocoding-api.open-meteo.com/v1/search",
+                [
+                    'name' => $name,
+                    'count' => 10,
+                    // Open-Meteo находит название только на языке запроса, поэтому кириллицу ищем на русском
+                    'language' => preg_match('/\p{Cyrillic}/u', $name) ? 'ru' : 'en',
+                    'format' => 'json',
+                ]
+            );
+        } catch (ConnectionException $e) {
+            throw new RuntimeException('Geocoding service is unavailable.', 0, $e);
+        }
 
         if (!$response->successful()) {
             throw new RuntimeException('Geocoding service is unavailable.');
