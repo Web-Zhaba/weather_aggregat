@@ -51,10 +51,10 @@ export default function MainPage() {
           {weatherData.city && (
             <p>Город: {weatherData.city.name}, {weatherData.city.country}</p>
           )}
-          <p>Часовой пояс: {weatherData.timezone}</p>
           <p>Дата: {weatherData.daily.time[0]}</p>
           <p>Максимальная температура: {weatherData.daily.temperature_2m_max[0]}°C</p>
           <p>Минимальная температура: {weatherData.daily.temperature_2m_min[0]}°C</p>
+          <p>Скорость ветра: {weatherData.daily.wind_speed_10m_max[0]} км/ч</p>
           <p>Осадки: {weatherData.daily.precipitation_sum[0]} мм</p>
         </section>
       )}

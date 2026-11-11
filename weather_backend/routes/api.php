@@ -5,9 +5,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Http;
 use App\Services\CityResolver;
+use App\Services\WeatherService;
+use App\Models\Source;
+use Illuminate\Support\Carbon;
 
 Route::prefix('v1')->group(function () {
-    Route::get('/weather', function (Request $request, CityResolver $resolver) {
+    Route::get('/weather', function (Request $request, CityResolver $resolver, WeatherService $weather) {
         // return weather data;
         $validated = $request->validate([
             'latitude' => 'required_without:city|numeric|between:-90,90',
@@ -30,6 +33,27 @@ Route::prefix('v1')->group(function () {
             $city = $result['city'];
             $validated['latitude'] = $city->lat;
             $validated['longitude'] = $city->lon;
+        }
+        if ($city) {
+            $date = isset($validated['date']) ? Carbon::parse($validated['date']) : today();
+            $source = Source::where('slug', 'open-meteo')->firstOrFail();
+
+            try {
+                $record = $weather->getDaily($city, $source, $date);
+            } catch (\RuntimeException $e) {
+                return response()->json(['error' => 'Weather service is unavailable. Please try again later.'], 502);
+            }
+
+            return [
+                'daily' => [
+                    'time' => [$record->date->toDateString()],
+                    'temperature_2m_max' => [$record->temp_max],
+                    'temperature_2m_min' => [$record->temp_min],
+                    'precipitation_sum' => [$record->precipitation],
+                    'wind_speed_10m_max' => [$record->wind_speed],
+                ],
+                'city' => $city,
+            ];
         }
 
         try {
