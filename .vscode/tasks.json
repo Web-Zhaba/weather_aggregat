@@ -1,0 +1,30 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Backend (Laravel)",
+      "type": "shell",
+      "command": "php artisan serve",
+      "options": { "cwd": "${workspaceFolder}/weather_backend" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "group": "dev" }
+    },
+    {
+      "label": "Frontend (Vite)",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "${workspaceFolder}/weather_frontend" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "group": "dev" }
+    },
+    {
+      "label": "Start all",
+      "dependsOn": ["Backend (Laravel)", "Frontend (Vite)"],
+      "dependsOrder": "parallel",
+      "problemMatcher": [],
+      "runOptions": { "runOn": "folderOpen" }
+    }
+  ]
+}

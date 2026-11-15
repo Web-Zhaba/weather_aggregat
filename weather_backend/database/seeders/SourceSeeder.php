@@ -18,7 +18,11 @@ class SourceSeeder extends Seeder
         );
         Source::updateOrCreate(
             ['slug' => 'met-norway'],
-            ['name' => 'MET Norway', 'is_active' => true]
+            ['name' => 'MET Norway', 'is_active' => false]
+        );
+        Source::updateOrCreate(
+            ['slug' => 'yandex'],
+            ['name' => 'Yandex', 'is_active' => true]
         );
     }
 }

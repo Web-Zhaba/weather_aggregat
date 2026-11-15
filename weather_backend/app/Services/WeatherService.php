@@ -5,10 +5,11 @@ namespace App\Services;
 use App\Models\City;
 use App\Models\Source;
 use App\Models\WeatherRecord;
-use Illuminate\Http\Client\ConnectionException;
+use App\Services\Providers\WeatherProvider;
+use App\Services\Providers\OpenMeteoProvider;
+use App\Services\Providers\YandexProvider;
 use RuntimeException;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Http;
 
 class WeatherService {
   private const TTL_HOURS = 3;
@@ -28,16 +29,26 @@ class WeatherService {
       return $record;
     }
 
-    $daily = $this->fetchForecast($city, $date);
+    $data = $this->provider($source)->fetchDaily($city, $date);
 
     // Сохранение или обновление записи в базе
     return WeatherRecord::updateOrCreate($key, [
-      'temp_max' => $daily['temperature_2m_max'][0],
-      'temp_min' => $daily['temperature_2m_min'][0],
-      'precipitation' => $daily['precipitation_sum'][0],
-      'wind_speed' => $daily['wind_speed_10m_max'][0],
+      'temp_max' => $data['temp_max'],
+      'temp_min' => $data['temp_min'],
+      'precipitation' => $data['precipitation'],
+      'wind_speed' => $data['wind_speed'],
+      'humidity' => $data['humidity'],
       'fetched_at' => now(),
     ]);
+  }
+
+  // Все провайдеры погоды
+  private function provider(Source $source): WeatherProvider {
+    return match ($source->slug) {
+        'open-meteo' => new OpenMeteoProvider(),
+        'yandex' => new YandexProvider(),
+        default => throw new RuntimeException("Unknown source: {$source->slug}"),
+    };
   }
 
   private function isFresh(WeatherRecord $record): bool {
@@ -45,26 +56,5 @@ class WeatherService {
       return true; // Для прошлых дат не проверяем свежесть
     }
     return $record->fetched_at->gt(now()->subHours(self::TTL_HOURS));
-  }
-  
-  private function fetchForecast(City $city, Carbon $date): array {
-    try {
-      $response = Http::get('https://api.open-meteo.com/v1/forecast', [
-        'latitude' => $city->lat,
-        'longitude' => $city->lon,
-        'daily' => 'temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max',
-        'timezone' => 'auto',
-        'start_date' => $date->toDateString(),
-        'end_date' => $date->toDateString(),
-      ]);
-    } catch (ConnectionException $e) {
-      throw new RuntimeException('Weather service is unavailable.', 0, $e);
-    }
-
-    if ($response->failed()) {
-      throw new RuntimeException('Weather service is unavailable.');
-    }
-
-    return $response->json('daily');
   }
 }

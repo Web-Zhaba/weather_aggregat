@@ -11,81 +11,42 @@ use Illuminate\Support\Carbon;
 
 Route::prefix('v1')->group(function () {
     Route::get('/weather', function (Request $request, CityResolver $resolver, WeatherService $weather) {
-        // return weather data;
         $validated = $request->validate([
-            'latitude' => 'required_without:city|numeric|between:-90,90',
-            'longitude' => 'required_without:city|numeric|between:-180,180',
             'date' => 'nullable|date',
-            'city' => 'required_without:latitude|string|min:2|max:100',
+            'city' => 'required|string|min:2|max:100',
             'country' => 'nullable|string|min:2|max:100',
         ]);
 
-        $city = null;
-        if (isset($validated['city'])) {
+        // 404 / 502 отдают сами исключения CityResolver
+        $city = $resolver->resolve($validated['city'], $validated['country'] ?? null)['city'];
+
+        // Если город найден в базе данных, используем его для получения прогноза погоды через WeatherService
+        $date = isset($validated['date']) ? Carbon::parse($validated['date']) : today();
+        $sources = [];
+
+        foreach (Source::where('is_active', true)->get() as $s) {
             try {
-                $result = $resolver->resolve($validated['city'], $validated['country'] ?? null);
+                $record = $weather->getDaily($city, $s, $date);
+                $sources[] = [
+                    'source' => $s->slug,
+                    'name' => $s->name,
+                    'city' => $city,
+                    'date' => $record->date->toDateString(),
+                    'temp_max' => $record->temp_max,
+                    'temp_min' => $record->temp_min,
+                    'precipitation' => $record->precipitation,
+                    'wind_speed' => $record->wind_speed,
+                    'humidity' => $record->humidity,
+                ];
             } catch (\RuntimeException $e) {
-                return response()->json(['error' => 'Geocoding service is unavailable. Please try again later.'], 502);
+                $sources[] = [
+                    'source' => $s->slug,
+                    'name' => $s->name,
+                    'error' => 'unavailable'
+                ];
             }
-            if (!$result) {
-                return response()->json(['error' => 'City not found.'], 404);
-            }
-            $city = $result['city'];
-            $validated['latitude'] = $city->lat;
-            $validated['longitude'] = $city->lon;
         }
-        if ($city) {
-            $date = isset($validated['date']) ? Carbon::parse($validated['date']) : today();
-            $source = Source::where('slug', 'open-meteo')->firstOrFail();
-
-            try {
-                $record = $weather->getDaily($city, $source, $date);
-            } catch (\RuntimeException $e) {
-                return response()->json(['error' => 'Weather service is unavailable. Please try again later.'], 502);
-            }
-
-            return [
-                'daily' => [
-                    'time' => [$record->date->toDateString()],
-                    'temperature_2m_max' => [$record->temp_max],
-                    'temperature_2m_min' => [$record->temp_min],
-                    'precipitation_sum' => [$record->precipitation],
-                    'wind_speed_10m_max' => [$record->wind_speed],
-                ],
-                'city' => $city,
-            ];
-        }
-
-        try {
-            $response = Http::get(
-                "https://api.open-meteo.com/v1/forecast",
-                [
-                    'latitude' => $validated['latitude'],
-                    'longitude' => $validated['longitude'],
-                    'daily' => 'temperature_2m_max,temperature_2m_min,precipitation_sum',
-                    'timezone' => 'auto',
-                    'start_date' => $validated['date'] ?? now()->toDateString(),
-                    'end_date' => $validated['date'] ?? now()->toDateString(),
-                ]
-            );
-        } catch (ConnectionException $e) {
-            return response()->json(['error' => 'Weather service is unavailable. Please try again later.'], 502);
-        }
-        if ($response->failed()) {
-            return response()->json(['error' => 'Weather service is unavailable. Please try again later.'], 502);
-        }
-        $unformatted_data = $response->json();
-        $formatted_data = [
-            'timezone' => $unformatted_data['timezone'],
-            'daily' => [],
-        ];
-        foreach ($unformatted_data['daily'] as $key => $value) {
-            $formatted_data['daily'][$key] = $value;
-        }
-        if ($city) {
-            $formatted_data['city'] = $city;
-        }
-        return $formatted_data;
+        return ['city' => $city, 'date' => $date->toDateString(), 'sources' => $sources];
     });
 
     // Поиск города по названию и сохранение его в базу данных, если он не найден (геокодинг короче)
@@ -95,15 +56,7 @@ Route::prefix('v1')->group(function () {
             'country' => 'nullable|string|min:2|max:100',
         ]);
 
-        try {
-            $result = $resolver->resolve($validated['city'], $validated['country'] ?? null);
-        } catch (\RuntimeException $e) {
-            return response()->json(['error' => 'Geocoding service is unavailable. Please try again later.'], 502);
-        }
-
-        if (!$result) {
-            return response()->json(['error' => 'City not found.'], 404);
-        }
+        $result = $resolver->resolve($validated['city'], $validated['country'] ?? null);
 
         return response()->json(
             ['city' => $result['city'], 'source' => $result['source']],

@@ -1,28 +1,86 @@
 import useLocalStorage from "../hooks/useLocalStorage.js";
 import { useState } from "react";
+import styles from "./MainPage.module.css";
+
+function show(value, unit) {
+  return value === null || value === undefined ? "нет данных" : `${value} ${unit}`;
+}
+
+function SourceCard({ source, index }) {
+  const style = { color: `var(--src-${(index % 5) + 1})` };
+
+  if (source.error) {
+    return (
+      <div className={styles.card}>
+        <h3 style={style}>{source.name}</h3>
+        <p className={styles.muted}>Источник недоступен</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.card}>
+      <h3 style={style}>{source.name}</h3>
+      <p>Максимум: {show(source.temp_max, "°C")}</p>
+      <p>Минимум: {show(source.temp_min, "°C")}</p>
+      <p>Ветер: {show(source.wind_speed, "м/с")}</p>
+      <p>Осадки: {show(source.precipitation, "мм")}</p>
+      <p>Влажность: {show(source.humidity, "%")}</p>
+    </div>
+  );
+}
+
+function average(sources, field) {
+  const values = sources.filter((s) => !s.error && s[field] != null).map((s) => s[field]);
+  if (values.length === 0) return null;
+  return (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
+}
+
+function AverageCard({ sources }) {
+  return (
+    <div className={styles.card}>
+      <h3>Среднее по источникам</h3>
+      <p>Максимум: {show(average(sources, "temp_max"), "°C")}</p>
+      <p>Минимум: {show(average(sources, "temp_min"), "°C")}</p>
+      <p>Ветер: {show(average(sources, "wind_speed"), "м/с")}</p>
+      <p>Осадки: {show(average(sources, "precipitation"), "мм")}</p>
+      <p>Влажность: {show(average(sources, "humidity"), "%")}</p>
+    </div>
+  );
+}
 
 export default function MainPage() {
   const [city, setCity] = useLocalStorage("city");
   const [date, setDate] = useLocalStorage("date");
   const [country, setCountry] = useLocalStorage("country");
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [weatherData, setWeatherData] = useState(null);
-  
+
   async function handleSubmit(event) {
     event.preventDefault();
     setError(null);
     setWeatherData(null);
-    const requestData = { "city": city, ...(country && { "country": country }), ...(date && { "date": date }) };
-    const response = await fetch(`/api/v1/weather?${new URLSearchParams(requestData).toString()}`, {
-      headers: { Accept: "application/json" },
-    });
-    const body = await response.json();
-    if (response.ok) {
-      setWeatherData(body);
-    } else {
-      setError(body.error);
+    setLoading(true);
+
+    const requestData = { city, ...(country && { country }), ...(date && { date }) };
+
+    try {
+      const response = await fetch(`/api/v1/weather?${new URLSearchParams(requestData)}`, {
+        headers: { Accept: "application/json" },
+      });
+      const body = await response.json();
+      if (response.ok) {
+        setWeatherData(body);
+      } else {
+        setError(body.error || body.message || "Не удалось получить прогноз");
+      }
+    } catch {
+      setError("Нет связи с сервером");
+    } finally {
+      setLoading(false);
     }
-  };
+  }
 
   return (
     <div>
@@ -41,22 +99,25 @@ export default function MainPage() {
             Дата:
             <input type="date" name="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
-          <button type="submit" name="search">Поиск</button>
+          <button type="submit" name="search" disabled={loading}>Поиск</button>
         </form>
       </section>
-      {error && <p style={{ color: "red" }}>{error}</p>}
+
+      {loading && <p>Загрузка...</p>}
+      {error && <p className={styles.error}>{error}</p>}
+
       {weatherData && (
         <section className="weather-data">
-          <h2>Данные о погоде</h2>
-          {weatherData.city && (
-            <p>Город: {weatherData.city.name}, {weatherData.city.country}</p>
-          )}
-          <p>Дата: {weatherData.daily.time[0]}</p>
-          <p>Максимальная температура: {weatherData.daily.temperature_2m_max[0]}°C</p>
-          <p>Минимальная температура: {weatherData.daily.temperature_2m_min[0]}°C</p>
-          <p>Скорость ветра: {weatherData.daily.wind_speed_10m_max[0]} км/ч</p>
-          <p>Осадки: {weatherData.daily.precipitation_sum[0]} мм</p>
-        </section>
+          <h2>
+            {weatherData.city.name}, {weatherData.city.country} — {weatherData.date}
+          </h2>
+          <div className={styles.cards}>
+            <AverageCard sources={weatherData.sources} />
+            {weatherData.sources.map((source, i) => (
+              <SourceCard key={source.source} source={source} index={i} />
+            ))}
+          </div>
+                  </section>
       )}
     </div>
   );
